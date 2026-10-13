@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>나만의 8마디 작곡</title>
+<style>
+:root{--fg:#111;--line:#b8bec8;--pri:#1d4ed8;--hl:#fde68a}
+*{box-sizing:border-box}
+body{font-family:Pretendard,"Malgun Gothic",sans-serif;font-size:18px;color:var(--fg);background:#fff;margin:0;padding:16px;line-height:1.5}
+h1{font-size:28px;margin:0 0 4px}
+h2{font-size:22px;margin:0 0 8px}
+p{margin:6px 0}
+section{border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:12px}
+label{display:block;margin:4px 0}
+input,select{font-size:18px;padding:8px;border:1px solid #6b7280;border-radius:6px;min-height:44px;width:100%;margin-top:4px}
+input[type=range]{padding:0;min-height:32px}
+button{font-size:18px;min-height:44px;padding:6px 14px;border:1px solid var(--pri);background:#fff;color:var(--pri);border-radius:6px;cursor:pointer}
+button.main{background:var(--pri);color:#fff}
+button:disabled{opacity:.5;cursor:not-allowed}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.cards3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.ccard{border:1px solid var(--line);border-radius:8px;padding:8px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.card{border:1px solid var(--line);border-radius:8px;padding:8px;min-height:140px;background:#fff}
+.card.editable{cursor:pointer}
+.card.playing,tr.playing td{background:var(--hl)}
+.chead{display:flex;justify-content:space-between;align-items:center}
+.chord{color:var(--pri);font-weight:bold}
+.lyric{min-height:28px;font-weight:bold;margin:4px 0}
+.notes{display:flex;flex-wrap:wrap;gap:4px}
+.note{min-width:60px;min-height:44px;padding:2px 4px;display:flex;flex-direction:column;align-items:center;color:var(--fg);border-color:#4b5563;font-size:18px;line-height:1.2}
+.ns{font-weight:bold}
+.guide{font-size:18px;color:#374151}
+.tablewrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th,td{border:1px solid var(--line);padding:6px;text-align:left;vertical-align:top}
+.msg{color:#b91c1c;font-weight:bold;min-height:26px;margin:6px 0}
+.banner{background:#eff6ff;border:1px solid var(--pri);border-radius:8px;padding:12px;margin-bottom:12px}
+.hidden{display:none !important}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;padding:12px}
+.modal.open{display:flex}
+.box{background:#fff;border-radius:8px;padding:16px;max-width:600px;width:100%;max-height:90vh;overflow:auto;border:1px solid var(--line)}
+.cand{border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px}
+.pat{font-weight:bold;font-size:20px;margin:0}
+.pitchlist{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:8px 0}
+@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:640px){.grid{grid-template-columns:1fr}.two,.cards3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<h1>나만의 8마디 작곡</h1>
+<p class="guide">마디 칸을 눌러 노랫말을 적고, 리듬을 고른 뒤 음표를 눌러 음정을 바꿔 보세요.</p>
+<div id="sharedBanner" class="banner hidden"></div>
+
+<section>
+  <div class="two">
+    <label>곡 제목 (최대 20자)<input id="title" maxlength="20" placeholder="예: 봄 노래"></label>
+    <label>작곡가 이름 (최대 20자)<input id="composer" maxlength="20" placeholder="내 이름"></label>
+  </div>
+</section>
+
+<section>
+  <h2>화음 알아보기 (다장조)</h2>
+  <div class="cards3">
+    <div class="ccard"><b>I (도·미·솔)</b><p>안정적이고 편안한 느낌입니다. 곡의 시작과 끝에 씁니다.</p></div>
+    <div class="ccard"><b>IV (파·라·도)</b><p>부드럽고 잔잔한 느낌입니다. 긴장을 풀어 주는 역할을 합니다.</p></div>
+    <div class="ccard"><b>V (솔·시·레)</b><p>긴장감과 기대감이 있습니다. I로 돌아가려는 느낌을 줍니다.</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>8마디 작곡</h2>
+  <p class="guide">화음 진행: I - V - IV - V - I - IV - V - I (4분의 4박자, 한 마디 4박)</p>
+  <div id="grid" class="grid"></div>
+</section>
+
+<section>
+  <h2>재생</h2>
+  <div class="row">
+    <button id="btnPlay" class="main">재생</button>
+    <button id="btnStop">정지</button>
+    <button id="btnReset">처음부터</button>
+  </div>
+  <label>빠르기 <span id="bpmVal"></span>
+    <input type="range" id="bpm" min="60" max="140" step="1">
+  </label>
+  <p id="tempoName"></p>
+  <div class="row">
+    <label style="flex:1">음색
+      <select id="timbre">
+        <option value="piano">피아노</option>
+        <option value="organ">오르간</option>
+        <option value="flute">플루트</option>
+        <option value="violin">바이올린</option>
+      </select>
+    </label>
+    <label style="flex:1"><input type="checkbox" id="chordOn" style="width:auto;min-height:auto"> 화음 구성음 함께 연주</label>
+  </div>
+  <p class="guide">노래 분위기에 맞는 음색을 골라 보세요.</p>
+</section>
+
+<section>
+  <h2>악보 정리</h2>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>마디</th><th>화음</th><th>가사</th><th>리듬</th><th>음정</th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</section>
+
+<section id="shareSec">
+  <h2>저장 및 공유</h2>
+  <div class="row">
+    <button id="btnSave">작품 저장 (텍스트 파일)</button>
+    <button id="btnLink" class="main">공유 링크 만들기</button>
+  </div>
+  <label>공유 링크<input id="linkOut" readonly placeholder="[공유 링크 만들기]를 누르면 여기에 표시됩니다"></label>
+  <label>패들렛 주소 (선택)<input id="padlet" placeholder="https://padlet.com/..."></label>
+  <div class="row"><button id="btnPadlet">패들렛에 올리기</button></div>
+  <p class="guide">패들렛에서 붙여넣기(Ctrl+V)를 누르면 공유 링크가 들어갑니다.</p>
+</section>
+<div id="msg" class="msg" role="status"></div>
+
+<!-- 노랫말 입력 창 -->
+<div id="lyricModal" class="modal">
+  <div class="box">
+    <h2 id="lyricTitle"></h2>
+    <label>노랫말 (한글 1~10글자)<input id="lyricIn" autocomplete="off"></label>
+    <div id="lyricMsg" class="msg"></div>
+    <div class="row">
+      <button id="btnCand" class="main">리듬 추천 9개 보기</button>
+      <button data-close="lyricModal">닫기</button>
+    </div>
+    <div id="candBox"></div>
+  </div>
+</div>
+
+<!-- 음정 선택 창 -->
+<div id="pitchModal" class="modal">
+  <div class="box">
+    <h2 id="pitchTitle"></h2>
+    <p class="guide">★ 표시는 이 마디 화음의 구성음입니다. 음을 고르면 바로 들려줍니다.</p>
+    <div id="pitchList" class="pitchlist"></div>
+    <div class="row"><button data-close="pitchModal">닫기</button></div>
+  </div>
+</div>
+
+<script>
+// ===== 기본 설정 =====
+const CHORD_PROG=['I','V','IV','V','I','IV','V','I'];          // 고정 화음 진행
+const CHORD_TONES={I:[0,2,4,7],IV:[0,3,5,7],V:[1,4,6]};       // 음 번호(0=도 ~ 7=높은 도) 기준 구성음
+const CHORD_MIDI={I:[48,52,55],IV:[53,57,60],V:[55,59,62]};   // 화음 반주용 낮은 음 (MIDI 번호)
+const SCALE=[60,62,64,65,67,69,71,72];                         // 도~높은 도 (MIDI 번호)
+const PITCH_NAMES=['도','레','미','파','솔','라','시','높은 도'];
+const DURS=[                                                   // 음표 길이 (한 마디 16칸 기준)
+  {d:16,name:'온음표',short:'온음',sym:'온'},
+  {d:12,name:'점2분음표',short:'점이분',sym:'점이분'},
+  {d:8,name:'2분음표',short:'이분',sym:'이분'},
+  {d:6,name:'점4분음표',short:'점사분',sym:'점사분'},
+  {d:4,name:'4분음표',short:'사분',sym:'♩'},
+  {d:2,name:'8분음표',short:'팔분',sym:'♪'},
+  {d:1,name:'16분음표',short:'십육분',sym:'♬'}
+];
+const TIMBRES={piano:'피아노',organ:'오르간',flute:'플루트',violin:'바이올린'};
+const SPEC={                                                   // 음색 합성 (배음 구성)
+  piano:[['triangle',1,0.6],['sine',2,0.15]],
+  organ:[['sine',1,0.5],['sine',2,0.3],['sine',3,0.15]],
+  flute:[['sine',1,0.8],['sine',2,0.08]],
+  violin:[['sawtooth',1,0.3]]
+};
+const STORE_KEY='eight-bar-song-v1';
+
+// ===== 상태 =====
+let song=freshSong();
+let readOnly=false;
+let ctx=null, timers=[], nodes=[];
+let curM=-1, pitchTarget=null;
+
+// ===== 유틸 =====
+const $=id=>document.getElementById(id);
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);}
+function durInfo(d){return DURS.find(x=>x.d===d);}
+function freq(m){return 440*Math.pow(2,(m-69)/12);}
+function showMsg(t){$('msg').textContent=t;}
+function closeModal(id){$(id).classList.remove('open');}
+function tempoInfo(b){
+  if(b<=75) return 'Adagio(아다지오, 느리고 차분하게)';
+  if(b<=107) return 'Andante(안단테, 걷는 듯한 빠르기)';
+  if(b<=119) return 'Moderato(모데라토, 보통 빠르기)';
+  return 'Allegro(알레그로, 빠르고 경쾌하게)';
+}
+function freshSong(){
+  return {title:'',composer:'',bpm:90,timbre:'piano',chordOn:false,
+    measures:Array.from({length:8},()=>({lyric:'',notes:[]}))};
+}
+function loadLocal(){
+  try{
+    const s=JSON.parse(localStorage.getItem(STORE_KEY));
+    if(s&&s.measures&&s.measures.length===8) return s;
+  }catch(e){}
+  return freshSong();
+}
+function saveLocal(){
+  if(!readOnly) localStorage.setItem(STORE_KEY,JSON.stringify(song));
+}
+async function copyText(text){
+  try{ await navigator.clipboard.writeText(text); return true; }
+  catch(e){
+    const ta=document.createElement('textarea');
+    ta.value=text; document.body.appendChild(ta); ta.select();
+    let ok=false;
+    try{ ok=document.execCommand('copy'); }catch(err){}
+    ta.remove();
+    return ok;
+  }
+}
+
+// ===== 가사 검사 =====
+function checkLyric(text,n){
+  const t=text.replace(/\s+/g,'');
+  if(t.length===0) return `${n}마디의 가사가 비어 있어요. 가사를 1~10글자로 적어 주세요.`;
+  if(t.length>10) return '가사가 10글자를 넘었어요. 1~10글자로 줄여 주세요.';
+  if(!/^[가-힣]+$/.test(t)) return '한글로 적어 주세요.';
+  return '';
+}
+
+// ===== 리듬 후보 계산 =====
+// 한 마디 16칸을 음표 길이의 합으로 채우는 조합 중, 음표 수가 글자 수 이상이고 글자 수+2 이하인 것을 고른다.
+function makeRhythms(k){
+  const durs=[16,12,8,6,4,2,1];
+  const all=[];
+  (function rec(rem,arr){
+    if(arr.length>k+2) return;
+    if(rem===0){ if(arr.length>=k) all.push(arr.slice()); return; }
+    for(const d of durs){
+      if(d<=rem){ arr.push(d); rec(rem-d,arr); arr.pop(); }
+    }
+  })(16,[]);
+  const ones=a=>a.filter(x=>x===1).length;
+  all.sort((a,b)=>{
+    const ea=a.length-k, eb=b.length-k;
+    if(ea!==eb) return ea-eb;               // 늘여 부르는 음표가 적은 순서
+    if(ones(a)!==ones(b)) return ones(a)-ones(b); // 짧은 음표가 적은 순서
+    const da=new Set(a).size, db=new Set(b).size;
+    if(da!==db) return db-da;               // 다양한 길이 우선
+    return a.join(',').localeCompare(b.join(','));
+  });
+  return all.slice(0,9);
+}
+
+// 글자를 음표에 배정한다. 음표가 더 많으면 앞 글자를 늘여 부르는 음(s가 빈 값)으로 처리한다.
+function buildNotes(syl,durs){
+  const k=syl.length, extra=durs.length-k;
+  const counts=Array(k).fill(1);
+  for(let e=0;e<extra;e++) counts[e%k]++;
+  const notes=[]; let di=0;
+  for(let i=0;i<k;i++){
+    for(let c=0;c<counts[i];c++){
+      notes.push({d:durs[di++], s:c===0?syl[i]:''});
+    }
+  }
+  return notes;
+}
+
+// 같은 음이 이어지는 붙임 음표는 하나의 소리로 묶는다.
+function groupNotes(notes){
+  const groups=[];
+  notes.forEach(n=>{
+    const prev=groups[groups.length-1];
+    if(n.s===''&&prev&&prev.p===n.p) prev.len+=n.d;
+    else groups.push({p:n.p,len:n.d});
+  });
+  return groups;
+}
+
+// ===== 음 합성 (Web Audio API) =====
+function getCtx(){
+  if(!ctx) ctx=new (window.AudioContext||window.webkitAudioContext)();
+  if(ctx.state==='suspended') ctx.resume();
+  return ctx;
+}
+function voice(midi,t,dur,timbre,vol){
+  const c=getCtx();
+  const g=c.createGain();
+  g.connect(c.destination);
+  let dest=g;
+  if(timbre==='violin'){
+    const lp=c.createBiquadFilter();
+    lp.type='lowpass'; lp.frequency.value=1800;
+    lp.connect(g); dest=lp;
+  }
+  const attack=timbre==='flute'?0.08:(timbre==='violin'?0.06:0.01);
+  const piano=timbre==='piano';
+  const end=t+dur+(piano?0.8:0.08);
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.linearRampToValueAtTime(vol,t+attack);
+  if(piano){
+    g.gain.exponentialRampToValueAtTime(0.0001,end);
+  }else{
+    g.gain.setValueAtTime(vol,t+dur);
+    g.gain.linearRampToValueAtTime(0.0001,end);
+  }
+  (SPEC[timbre]||SPEC.piano).forEach(([type,mult,amp])=>{
+    const o=c.createOscillator();
+    o.type=type;
+    o.frequency.value=freq(midi)*mult;
+    const og=c.createGain();
+    og.gain.value=amp;
+    o.connect(og); og.connect(dest);
+    o.start(t); o.stop(end+0.05);
+    nodes.push(o);
+  });
+}
+
+// ===== 재생 =====
+function highlight(i){
+  document.querySelectorAll('[data-i]').forEach(el=>{
+    el.classList.toggle('playing', Number(el.dataset.i)===i);
+  });
+}
+function stopPlayback(){
+  timers.forEach(id=>clearTimeout(id)); timers=[];
+  nodes.forEach(o=>{ try{ o.stop(); }catch(e){} }); nodes=[];
+  highlight(-1);
+}
+function startPlayback(){
+  stopPlayback();
+  const c=getCtx();
+  const sec16=60/song.bpm/4;      // 16분음표 한 칸의 길이(초)
+  const mDur=16*sec16;            // 한 마디 길이(초)
+  const t0=c.currentTime+0.1;
+  song.measures.forEach((m,i)=>{
+    const ms=t0+i*mDur;
+    if(song.chordOn){
+      CHORD_MIDI[CHORD_PROG[i]].forEach(mid=>{
+        for(let b=0;b<4;b++) voice(mid,ms+b*4*sec16,4*sec16*0.9,song.timbre,0.07);
+      });
+    }
+    let t=ms;
+    groupNotes(m.notes).forEach(g=>{
+      voice(SCALE[g.p],t,g.len*sec16,song.timbre,0.25);
+      t+=g.len*sec16;
+    });
+    timers.push(setTimeout(()=>highlight(i),Math.max(0,(ms-c.currentTime)*1000)));
+  });
+  timers.push(setTimeout(()=>highlight(-1),Math.max(0,(t0+8*mDur-c.currentTime)*1000)));
+}
+function previewRhythm(notes){
+  stopPlayback();
+  const tones=CHORD_TONES[CHORD_PROG[curM]];
+  const withP=notes.map((n,j)=>({d:n.d,s:n.s,p:tones[j%tones.length]}));
+  const c=getCtx();
+  const sec16=60/song.bpm/4;
+  let t=c.currentTime+0.05;
+  groupNotes(withP).forEach(g=>{
+    voice(SCALE[g.p],t,g.len*sec16,song.timbre,0.25);
+    t+=g.len*sec16;
+  });
+}
+function playOne(p){
+  const c=getCtx();
+  voice(SCALE[p],c.currentTime+0.02,60/song.bpm,song.timbre,0.25);
+}
+
+// ===== 노랫말·리듬 창 =====
+function openLyric(i){
+  if(readOnly) return;
+  curM=i;
+  $('lyricTitle').textContent=`마디 ${i+1} 노랫말 입력 (화음 ${CHORD_PROG[i]})`;
+  $('lyricIn').value=song.measures[i].lyric;
+  $('lyricMsg').textContent='';
+  $('candBox').innerHTML='';
+  $('lyricModal').classList.add('open');
+  $('lyricIn').focus();
+}
+function showCandidates(){
+  const text=$('lyricIn').value;
+  const box=$('candBox');
+  box.innerHTML='';
+  const err=checkLyric(text,curM+1);
+  if(err){ $('lyricMsg').textContent=err; return; }
+  $('lyricMsg').textContent='';
+  const syl=Array.from(text.replace(/\s+/g,''));
+  const cands=makeRhythms(syl.length);
+  const guide=document.createElement('p');
+  guide.className='guide';
+  guide.textContent=`'${syl.join('')}' (${syl.length}글자)에 맞는 리듬이 ${cands.length}개 있어요. "–" 표시는 앞 글자를 늘여 부르는 음표입니다.`;
+  box.appendChild(guide);
+  cands.forEach((durs,idx)=>{
+    const notes=buildNotes(syl,durs);
+    const div=document.createElement('div');
+    div.className='cand';
+    const pat=document.createElement('p');
+    pat.className='pat';
+    pat.textContent=`리듬 ${idx+1}  ${durs.map(d=>durInfo(d).sym).join(' ')}`;
+    const lyr=document.createElement('p');
+    lyr.textContent=`가사  ${notes.map(n=>n.s||'–').join(' ')}`;
+    const row=document.createElement('div');
+    row.className='row';
+    const bl=document.createElement('button');
+    bl.textContent='듣기';
+    bl.addEventListener('click',()=>previewRhythm(notes));
+    const bp=document.createElement('button');
+    bp.className='main';
+    bp.textContent='이 리듬 고르기';
+    bp.addEventListener('click',()=>pickRhythm(syl,durs));
+    row.append(bl,bp);
+    div.append(pat,lyr,row);
+    box.appendChild(div);
+  });
+}
+function pickRhythm(syl,durs){
+  const m=song.measures[curM];
+  const tones=CHORD_TONES[CHORD_PROG[curM]];
+  const old=m.notes.map(n=>n.p);
+  const notes=buildNotes(syl,durs);
+  // 음표 수가 같으면 기존 음정을 유지하고, 달라지면 화음 구성음을 순서대로 배치한다.
+  notes.forEach((n,j)=>{
+    n.p=old.length===notes.length?old[j]:tones[j%tones.length];
+  });
+  m.lyric=syl.join('');
+  m.notes=notes;
+  saveLocal();
+  renderAll();
+  closeModal('lyricModal');
+  showMsg(`마디 ${curM+1}을 완성했어요. 음표를 누르면 음정을 바꿀 수 있어요.`);
+}
+
+// ===== 음정 창 =====
+function openPitch(i,j){
+  if(readOnly) return;
+  pitchTarget={i,j};
+  const n=song.measures[i].notes[j];
+  const tones=CHORD_TONES[CHORD_PROG[i]];
+  $('pitchTitle').textContent=`마디 ${i+1}, ${n.s?'"'+n.s+'" 음':'이어 부르는 음'} 음정 고르기`;
+  const list=$('pitchList');
+  list.innerHTML='';
+  PITCH_NAMES.forEach((name,p)=>{
+    const b=document.createElement('button');
+    b.textContent=(tones.includes(p)?'★ ':'')+name;
+    if(n.p===p) b.className='main';
+    b.addEventListener('click',()=>choosePitch(p));
+    list.appendChild(b);
+  });
+  $('pitchModal').classList.add('open');
+  playOne(n.p);
+}
+function choosePitch(p){
+  const {i,j}=pitchTarget;
+  song.measures[i].notes[j].p=p;
+  saveLocal();
+  renderAll();
+  playOne(p);
+  closeModal('pitchModal');
+}
+
+// ===== 악보 화면 =====
+function renderGrid(){
+  const grid=$('grid');
+  grid.innerHTML='';
+  song.measures.forEach((m,i)=>{
+    const card=document.createElement('div');
+    card.className='card'+(readOnly?'':' editable');
+    card.dataset.i=i;
+    const head=document.createElement('div');
+    head.className='chead';
+    head.innerHTML=`<b>마디 ${i+1}</b><span class="chord">화음 ${CHORD_PROG[i]}</span>`;
+    const lyr=document.createElement('div');
+    lyr.className='lyric';
+    lyr.textContent=m.notes.length?m.lyric:'아직 가사가 없어요';
+    const nr=document.createElement('div');
+    nr.className='notes';
+    m.notes.forEach((n,j)=>{
+      const b=document.createElement('button');
+      b.className='note';
+      b.innerHTML=`<span class="ns">${n.s?esc(n.s):'–'}</span><span>${durInfo(n.d).sym}</span><span>${PITCH_NAMES[n.p]}</span>`;
+      b.addEventListener('click',e=>{ e.stopPropagation(); openPitch(i,j); });
+      nr.appendChild(b);
+    });
+    card.append(head,lyr,nr);
+    if(!readOnly) card.addEventListener('click',()=>openLyric(i));
+    grid.appendChild(card);
+  });
+}
+function renderTable(){
+  const tb=$('tbody');
+  tb.innerHTML='';
+  song.measures.forEach((m,i)=>{
+    const has=m.notes.length>0;
+    const tr=document.createElement('tr');
+    tr.dataset.i=i;
+    tr.innerHTML=`<td>${i+1}</td><td>${CHORD_PROG[i]}</td><td>${has?esc(m.lyric):'아직 가사가 없어요'}</td><td>${has?m.notes.map(n=>durInfo(n.d).short).join(' '):'-'}</td><td>${has?m.notes.map(n=>PITCH_NAMES[n.p]).join(' '):'-'}</td>`;
+    tb.appendChild(tr);
+  });
+}
+function updateBpmLabel(){
+  $('bpmVal').textContent=song.bpm+' BPM';
+  $('tempoName').textContent='빠르기말: '+tempoInfo(song.bpm);
+}
+function renderAll(){
+  renderGrid();
+  renderTable();
+  updateBpmLabel();
+}
+
+// ===== 저장 및 공유 =====
+function saveText(){
+  if(!song.title.trim()){ showMsg('곡 제목을 적어야 저장할 수 있어요.'); return; }
+  const lines=[
+    `곡 제목: ${song.title}`,
+    `작곡가: ${song.composer||'이름 없음'}`,
+    '조성: 다장조 / 박자: 4분의 4박자',
+    `빠르기: ${song.bpm} BPM (${tempoInfo(song.bpm)})`,
+    `음색: ${TIMBRES[song.timbre]}`,
+    ''
+  ];
+  song.measures.forEach((m,i)=>{
+    const has=m.notes.length>0;
+    lines.push(`${i+1}마디 | 화음 ${CHORD_PROG[i]} | 가사 ${has?m.lyric:'아직 가사가 없어요'} | 리듬 ${has?m.notes.map(n=>durInfo(n.d).short).join(' '):'-'} | 음정 ${has?m.notes.map(n=>PITCH_NAMES[n.p]).join(' '):'-'}`);
+  });
+  const blob=new Blob(['\ufeff'+lines.join('\n')],{type:'text/plain;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`${song.title}.txt`;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  showMsg('텍스트 파일을 저장했어요.');
+}
+function encodeSong(){
+  const data={
+    t:song.title,c:song.composer,b:song.bpm,i:song.timbre,k:song.chordOn?1:0,
+    m:song.measures.map(m=>({l:m.lyric,n:m.notes.map(n=>[n.d,n.s,n.p])}))
+  };
+  const bytes=new TextEncoder().encode(JSON.stringify(data));
+  let bin='';
+  bytes.forEach(x=>{ bin+=String.fromCharCode(x); });
+  return btoa(bin);
+}
+function decodeSong(b64){
+  const bin=atob(b64);
+  const bytes=Uint8Array.from(bin,c=>c.charCodeAt(0));
+  const d=JSON.parse(new TextDecoder().decode(bytes));
+  return {
+    title:d.t,composer:d.c,bpm:d.b,timbre:d.i,chordOn:d.k===1,
+    measures:d.m.map(m=>({lyric:m.l,notes:m.n.map(([dd,s,p])=>({d:dd,s:s,p:p}))}))
+  };
+}
+function makeLink(){
+  if(!song.title.trim()){ showMsg('곡 제목을 적어야 저장할 수 있어요.'); return ''; }
+  return location.origin+location.pathname+'#song='+encodeURIComponent(encodeSong());
+}
+
+// ===== 화면 초기화 =====
+function applyMode(){
+  $('title').value=song.title;
+  $('composer').value=song.composer;
+  $('bpm').value=song.bpm;
+  $('timbre').value=song.timbre;
+  $('chordOn').checked=song.chordOn;
+  ['title','composer'].forEach(id=>{ $(id).readOnly=readOnly; });
+  $('shareSec').classList.toggle('hidden',readOnly);
+  if(readOnly){
+    const b=$('sharedBanner');
+    b.classList.remove('hidden');
+    b.textContent='공유된 작품입니다. 작곡가: '+(song.composer||'이름 없음')+' ';
+    const btn=document.createElement('button');
+    btn.textContent='내 작품으로 돌아가기';
+    btn.addEventListener('click',()=>{ location.hash=''; location.reload(); });
+    b.appendChild(btn);
+  }
+}
+function bindEvents(){
+  $('title').addEventListener('input',e=>{ song.title=e.target.value.slice(0,20); saveLocal(); });
+  $('composer').addEventListener('input',e=>{ song.composer=e.target.value.slice(0,20); saveLocal(); });
+  $('bpm').addEventListener('input',e=>{ song.bpm=Number(e.target.value); updateBpmLabel(); saveLocal(); });
+  $('timbre').addEventListener('change',e=>{ song.timbre=e.target.value; saveLocal(); });
+  $('chordOn').addEventListener('change',e=>{ song.chordOn=e.target.checked; saveLocal(); });
+  $('btnPlay').addEventListener('click',startPlayback);
+  $('btnStop').addEventListener('click',stopPlayback);
+  $('btnReset').addEventListener('click',()=>{ stopPlayback(); startPlayback(); });
+  $('btnCand').addEventListener('click',showCandidates);
+  $('lyricIn').addEventListener('keydown',e=>{ if(e.key==='Enter') showCandidates(); });
+  $('btnSave').addEventListener('click',saveText);
+  $('btnLink').addEventListener('click',async()=>{
+    const link=makeLink();
+    if(!link) return;
+    $('linkOut').value=link;
+    const ok=await copyText(link);
+    showMsg(ok?'공유 링크를 복사했어요. 패들렛이나 메신저에 붙여넣어 보세요.':'링크를 자동으로 복사하지 못했어요. 공유 링크 칸의 주소를 직접 복사해 주세요.');
+  });
+  $('btnPadlet').addEventListener('click',()=>{
+    const link=makeLink();
+    if(!link) return;
+    $('linkOut').value=link;
+    const url=$('padlet').value.trim();
+    copyText(`${song.title} - 작곡가 ${song.composer||'이름 없음'}\n${link}`);
+    if(/^https?:\/\//.test(url)){
+      window.open(url,'_blank');
+      showMsg('패들렛을 새 탭으로 열었어요. 붙여넣기(Ctrl+V)를 누르면 공유 링크가 들어갑니다.');
+    }else{
+      showMsg('패들렛 주소를 입력하면 새 탭으로 열어요. 지금은 공유 링크만 복사했어요.');
+    }
+  });
+  document.querySelectorAll('[data-close]').forEach(b=>{
+    b.addEventListener('click',()=>closeModal(b.dataset.close));
+  });
+}
+function init(){
+  const h=location.hash;
+  if(h.startsWith('#song=')){
+    try{
+      song=decodeSong(decodeURIComponent(h.slice(6)));
+      readOnly=true;
+    }catch(e){
+      song=loadLocal();
+      showMsg('공유 링크를 읽을 수 없어요. 링크를 다시 확인해 주세요.');
+    }
+  }else{
+    song=loadLocal();
+  }
+  bindEvents();
+  applyMode();
+  renderAll();
+}
+init();
+</script>
+</body>
+</html>
